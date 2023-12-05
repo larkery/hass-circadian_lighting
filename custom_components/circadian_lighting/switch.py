@@ -90,7 +90,7 @@ PLATFORM_SCHEMA = vol.Schema(
             CONF_INITIAL_TRANSITION, default=DEFAULT_INITIAL_TRANSITION
         ): VALID_TRANSITION,
         vol.Optional(CONF_ONLY_ONCE, default=False): cv.boolean,
-        vol.Optional(CONF_DEBOUNCE, default=CONF_DEBOUNCE):  vol.All(
+        vol.Optional(CONF_DEBOUNCE, default=DEFAULT_DEBOUNCE):  vol.All(
             vol.Coerce(int), vol.Range(min=0, max=1000)
         ),
     }
