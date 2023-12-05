@@ -5,6 +5,7 @@ Circadian Lighting Switch for Home-Assistant.
 import asyncio
 import logging
 from itertools import repeat
+import time
 
 import voluptuous as vol
 
@@ -58,6 +59,7 @@ CONF_DISABLE_ENTITY = "disable_entity"
 CONF_DISABLE_STATE = "disable_state"
 CONF_INITIAL_TRANSITION, DEFAULT_INITIAL_TRANSITION = "initial_transition", 1
 CONF_ONLY_ONCE = "only_once"
+CONF_DEBOUNCE, DEFAULT_DEBOUNCE = "debounce", 200
 
 PLATFORM_SCHEMA = vol.Schema(
     {
@@ -88,6 +90,9 @@ PLATFORM_SCHEMA = vol.Schema(
             CONF_INITIAL_TRANSITION, default=DEFAULT_INITIAL_TRANSITION
         ): VALID_TRANSITION,
         vol.Optional(CONF_ONLY_ONCE, default=False): cv.boolean,
+        vol.Optional(CONF_DEBOUNCE, default=CONF_DEBOUNCE):  vol.All(
+            vol.Coerce(int), vol.Range(min=0, max=1000)
+        ),
     }
 )
 
@@ -115,6 +120,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
             disable_state=config.get(CONF_DISABLE_STATE),
             initial_transition=config.get(CONF_INITIAL_TRANSITION),
             only_once=config.get(CONF_ONLY_ONCE),
+            debounce=config.get(CONF_DEBOUNCE),
         )
         add_devices([switch])
 
@@ -179,9 +185,11 @@ class CircadianSwitch(SwitchEntity, RestoreEntity):
         disable_state,
         initial_transition,
         only_once,
+        debounce,
     ):
         """Initialize the Circadian Lighting switch."""
         self.hass = hass
+        self.off_time = {}
         self._circadian_lighting = circadian_lighting
         self._name = name
         self._entity_id = f"switch.circadian_lighting_{slugify(name)}"
@@ -205,6 +213,7 @@ class CircadianSwitch(SwitchEntity, RestoreEntity):
         self._lights_types.update(zip(lights_xy, repeat("xy")))
         self._lights_types.update(zip(lights_brightness, repeat("brightness")))
         self._lights = list(self._lights_types.keys())
+        self._debounce = debounce
 
     @property
     def entity_id(self):
@@ -232,7 +241,7 @@ class CircadianSwitch(SwitchEntity, RestoreEntity):
 
         # Add listeners
         async_track_state_change(
-            self.hass, self._lights, self._light_state_changed, to_state="on"
+            self.hass, self._lights, self._light_state_changed, to_state=["on", "off"]
         )
         track_kwargs = dict(hass=self.hass, action=self._state_changed)
         if self._sleep_entity is not None:
@@ -379,10 +388,20 @@ class CircadianSwitch(SwitchEntity, RestoreEntity):
             await asyncio.wait(tasks)
 
     async def _light_state_changed(self, entity_id, from_state, to_state):
-        assert to_state.state == "on"
-        if from_state is None or from_state.state != "on":
-            _LOGGER.debug(_difference_between_states(from_state, to_state))
-            await self._force_update_switch(lights=[entity_id])
+        if to_state == "off":
+            self.off_time[entity_id] = time.time()
+        else:                
+            if from_state is None or from_state.state != "on":
+                if entity_id in self.off_time:
+                    delta_time = 1000 * (time.time() - self.off_time[entity_id])
+                else:
+                    delta_time = self._debounce
+
+                if delta_time < self._debounce:
+                    _LOGGER.debug("debounce avoided state change")
+                else:
+                    _LOGGER.debug(_difference_between_states(from_state, to_state))
+                    await self._force_update_switch(lights=[entity_id])
 
     async def _state_changed(self, entity_id, from_state, to_state):
         _LOGGER.debug(_difference_between_states(from_state, to_state))
