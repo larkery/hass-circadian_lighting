@@ -396,7 +396,7 @@ class CircadianSwitch(SwitchEntity, RestoreEntity):
         else:
             if self._brightness and (to_state.attributes[ATTR_BRIGHTNESS] != self._brightness):
                 _LOGGER.debug("manual brightness override for %s %s %s",
-                              entity_id
+                              entity_id,
                               to_state.attributes[ATTR_BRIGHTNESS],
                               self._brightness)
                 
