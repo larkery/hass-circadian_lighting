@@ -191,6 +191,7 @@ class CircadianSwitch(SwitchEntity, RestoreEntity):
         self.hass = hass
         self._off_time = {}
         self._manual_brightness = {}
+        self._expect_brightness = {}
         self._circadian_lighting = circadian_lighting
         self._name = name
         self._entity_id = f"switch.circadian_lighting_{slugify(name)}"
@@ -362,8 +363,13 @@ class CircadianSwitch(SwitchEntity, RestoreEntity):
                 continue
 
             service_data = {ATTR_ENTITY_ID: light, ATTR_TRANSITION: transition}
-            if self._brightness is not None and not(self._manual_brightness[light]):
-                service_data[ATTR_BRIGHTNESS] = int((self._brightness / 100) * 254)
+            if self._brightness is not None and not(self._manual_brightness.get(light, False)):
+                cur_brightness = self.hass.states.get(light).attributes[ATTR_BRIGHTNESS]
+                if cur_brightness != self._expect_brightness.get(light, cur_brightness):
+                    self._manual_brightness[light] = True
+                else:
+                    service_data[ATTR_BRIGHTNESS] = int((self._brightness / 100) * 254)
+                    self._expect_brightness[light] = service_data[ATTR_BRIGHTNESS]
 
             light_type = self._lights_types[light]
             if light_type == "ct":
@@ -393,15 +399,8 @@ class CircadianSwitch(SwitchEntity, RestoreEntity):
         if to_state.state == "off":
             self._off_time[entity_id] = time.time()
             self._manual_brightness[entity_id] = False
+            del self._expect_brightness[entity_id]
         else:
-            if self._brightness and (to_state.attributes[ATTR_BRIGHTNESS] != self._brightness):
-                _LOGGER.debug("manual brightness override for %s %s %s",
-                              entity_id,
-                              to_state.attributes[ATTR_BRIGHTNESS],
-                              self._brightness)
-                
-                self._manual_brightness[entity_id] = True
-                
             if from_state is None or from_state.state != "on":
                 if entity_id in self._off_time:
                     delta_time = 1000 * (time.time() - self._off_time[entity_id])
