@@ -399,7 +399,10 @@ class CircadianSwitch(SwitchEntity, RestoreEntity):
         if to_state.state == "off":
             self._off_time[entity_id] = time.time()
             self._manual_brightness[entity_id] = False
-            del self._expect_brightness[entity_id]
+            try:
+                del self._expect_brightness[entity_id]
+            except:
+                pass
         else:
             if from_state is None or from_state.state != "on":
                 if entity_id in self._off_time:
