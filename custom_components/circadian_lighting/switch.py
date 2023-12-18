@@ -189,7 +189,8 @@ class CircadianSwitch(SwitchEntity, RestoreEntity):
     ):
         """Initialize the Circadian Lighting switch."""
         self.hass = hass
-        self.off_time = {}
+        self._off_time = {}
+        self._manual_brightness = {}
         self._circadian_lighting = circadian_lighting
         self._name = name
         self._entity_id = f"switch.circadian_lighting_{slugify(name)}"
@@ -361,7 +362,7 @@ class CircadianSwitch(SwitchEntity, RestoreEntity):
                 continue
 
             service_data = {ATTR_ENTITY_ID: light, ATTR_TRANSITION: transition}
-            if self._brightness is not None:
+            if self._brightness is not None and not(self._manual_brightness[light]):
                 service_data[ATTR_BRIGHTNESS] = int((self._brightness / 100) * 254)
 
             light_type = self._lights_types[light]
@@ -377,6 +378,7 @@ class CircadianSwitch(SwitchEntity, RestoreEntity):
                 "Scheduling 'light.turn_on' with the following 'service_data': %s",
                 service_data,
             )
+
             tasks.append(
                 self.hass.async_create_task(
                     self.hass.services.async_call(
@@ -388,12 +390,15 @@ class CircadianSwitch(SwitchEntity, RestoreEntity):
             await asyncio.wait(tasks)
 
     async def _light_state_changed(self, entity_id, from_state, to_state):
-        if to_state == "off":
-            self.off_time[entity_id] = time.time()
-        else:                
+        if to_state.state == "off":
+            self._off_time[entity_id] = time.time()
+            self._manual_brightness[entity_id] = False
+        else:
+            if self._brightness and (to_state.attributes[ATTR_BRIGHTNESS] != self._brightness):
+                self._manual_brightness[entity_id] = True
             if from_state is None or from_state.state != "on":
-                if entity_id in self.off_time:
-                    delta_time = 1000 * (time.time() - self.off_time[entity_id])
+                if entity_id in self._off_time:
+                    delta_time = 1000 * (time.time() - self._off_time[entity_id])
                 else:
                     delta_time = self._debounce
 
