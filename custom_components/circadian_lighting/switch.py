@@ -411,7 +411,7 @@ class CircadianSwitch(SwitchEntity, RestoreEntity):
                 else:
                     _LOGGER.debug(_difference_between_states(from_state, to_state))
                     await self._force_update_switch(lights=[entity_id])
-            else if from_state.state == "on":
+            elif from_state.state == "on":
                 new_brightness = to_state.attributes[ATTR_BRIGHTNESS]
                 if abs(self._expect_brightness.get(entity_id, new_brightness) - new_brightness) > 25:
                     self._manual_brightness[entity_id] = true;
