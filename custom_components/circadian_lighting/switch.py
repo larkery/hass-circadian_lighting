@@ -364,12 +364,8 @@ class CircadianSwitch(SwitchEntity, RestoreEntity):
 
             service_data = {ATTR_ENTITY_ID: light, ATTR_TRANSITION: transition}
             if self._brightness is not None and not(self._manual_brightness.get(light, False)):
-                cur_brightness = self.hass.states.get(light).attributes[ATTR_BRIGHTNESS]
-                if cur_brightness != self._expect_brightness.get(light, cur_brightness):
-                    self._manual_brightness[light] = True
-                else:
-                    service_data[ATTR_BRIGHTNESS] = int((self._brightness / 100) * 254)
-                    self._expect_brightness[light] = service_data[ATTR_BRIGHTNESS]
+                service_data[ATTR_BRIGHTNESS] = int((self._brightness / 100) * 254)
+                self._expect_brightness[light] = service_data[ATTR_BRIGHTNESS]
 
             light_type = self._lights_types[light]
             if light_type == "ct":
@@ -415,6 +411,10 @@ class CircadianSwitch(SwitchEntity, RestoreEntity):
                 else:
                     _LOGGER.debug(_difference_between_states(from_state, to_state))
                     await self._force_update_switch(lights=[entity_id])
+            else if from_state.state == "on":
+                new_brightness = to_state.attributes[ATTR_BRIGHTNESS]
+                if abs(self._expect_brightness.get(entity_id, new_brightness) - new_brightness) > 25:
+                    self._manual_brightness[entity_id] = true;
 
     async def _state_changed(self, entity_id, from_state, to_state):
         _LOGGER.debug(_difference_between_states(from_state, to_state))
